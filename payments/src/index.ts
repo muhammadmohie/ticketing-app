@@ -1,0 +1,56 @@
+import mongoose from "mongoose";
+import { app } from "./app";
+import { natsWrapper } from "./nats-wrapper";
+import { OrderCreatedListener } from "./events/listeners/order-created-listener";
+import { OrderCancelledEvent } from "@mm-ticketing-app/common";
+import { OrderCancelledListener } from "./events/listeners/order-cancelled-listener";
+
+const start = async () => {
+  if (!process.env.JWT_KEY) {
+    throw new Error('No jwt key');
+  }
+  if (!process.env.MONGO_URI) {
+    throw new Error('MONGO_URI must be defined');
+  }
+  if (!process.env.NATS_CLUSTER_ID) {
+    throw new Error('NATS_CLUSTER_ID must be defined');
+  }
+
+  if (!process.env.NATS_CLIENT_ID) {
+    throw new Error('NATS_CLIENT_ID must be defined');
+  }
+  if (!process.env.NATS_URL) {
+    throw new Error('NATS_URL must be defined');
+  }
+    try {
+      await natsWrapper.connect(
+        process.env.NATS_CLUSTER_ID,
+        process.env.NATS_CLIENT_ID,
+        process.env.NATS_URL
+      );
+      
+      // Take into consideration close event of client 
+      natsWrapper.client.on('close', () => {
+        console.log('NATS connection closed');
+        process.exit();
+      });
+
+      process.on('SIGINT', () => natsWrapper.client.close());   // Close due to interrupt signal
+      process.on('SIGTERM', () => natsWrapper.client.close());  // Close due to termination signal
+      
+      new OrderCreatedListener(natsWrapper.client).listen();
+      new OrderCancelledListener(natsWrapper.client).listen();
+      
+      // Connect to mongoose
+      await mongoose.connect(process.env.MONGO_URI);
+      console.log('Connected to MongoDb');
+    } catch (err) {
+      console.error(err);
+    }
+  
+    app.listen(3000, () => {
+      console.log('Tickets is Listening on port 3000!');
+    });
+};
+
+start();

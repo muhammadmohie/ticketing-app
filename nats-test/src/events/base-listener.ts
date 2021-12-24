@@ -1,0 +1,58 @@
+import { Message, Stan} from 'node-nats-streaming';
+import { Subjects } from "./subjects";
+
+interface Event {
+  subject: Subjects;
+  data: any;
+}
+
+// Base class
+
+export abstract class Listener<T extends Event> {
+  abstract subject: T['subject'];
+  abstract queueGroupName: string;
+  // Queue group publish only to specific group of listeners
+  private client: Stan;
+  protected ackWait = 5* 1000;
+  abstract onMessage(data: T['data'], msg: Message): void;
+
+  constructor(client: Stan) {
+    this.client = client;
+  }
+
+  subscriptionOptions () {
+    return this.client
+      .subscriptionOptions()
+      .setDeliverAllAvailable()
+      // Publish all created events to online listener
+      .setManualAckMode(true)
+      // event won't be lost if something went wrong
+      .setAckWait(this.ackWait)
+      .setDurableName(this.queueGroupName);
+      // Hold the processed and non processed events inside the subscription
+  }
+
+  listen() {
+    const subscription = this.client.subscribe(
+      this.subject,
+      this.queueGroupName,
+      this.subscriptionOptions()
+    );
+    subscription.on('message', (msg: Message) => {
+      console.log(
+        `Message received: ${this.subject} / ${this.queueGroupName}`
+      );
+      const parsedData = this.parseMessage(msg);
+      this.onMessage(parsedData, msg);
+    });
+  }
+
+  parseMessage(msg: Message) {
+    const data = msg.getData();
+
+    return typeof data === 'string'
+      ? JSON.parse(data)
+      : JSON.parse(data.toString('utf8'));
+  }
+  
+}
