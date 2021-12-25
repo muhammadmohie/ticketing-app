@@ -2,10 +2,10 @@ import mongoose from "mongoose";
 import { app } from "./app";
 import { natsWrapper } from "./nats-wrapper";
 import { OrderCreatedListener } from "./events/listeners/order-created-listener";
-import { OrderCancelledEvent } from "@mm-ticketing-app/common";
 import { OrderCancelledListener } from "./events/listeners/order-cancelled-listener";
 
 const start = async () => {
+  console.log('Starting up...');
   if (!process.env.JWT_KEY) {
     throw new Error('No jwt key');
   }
